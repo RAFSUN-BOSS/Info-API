@@ -679,7 +679,7 @@
                                 <div class="info-item">
                                     <div class="info-label">Region</div>
                                     <div class="info-value">${basicInfo.AccountRegion || 'N/A'}</div>
-                                    <div class="region-badge">${basicInfo.AccountRegion || 'Unknown'}</div>
+                                    <div class="region-badge">${getRegionFlag(basicInfo.AccountRegion || 'Unknown')}</div>
                                 </div>
                                 <div class="info-item">
                                     <div class="info-label">Level</div>
@@ -851,7 +851,7 @@
                                     <div class="info-item">
                                         <div class="info-label">Region</div>
                                         <div class="info-value" style="font-size: 1.4rem;">${data.region}</div>
-                                        <div class="region-badge" style="font-size: 1.2rem; padding: 12px 25px;">${data.region}</div>
+                                        <div class="region-badge" style="font-size: 1.2rem; padding: 12px 25px;">${getRegionFlag(data.region)}</div>
                                     </div>
                                 </div>
 
@@ -1411,6 +1411,29 @@ Returns a PNG image of the player's outfit
 
             function formatNumber(num) {
                 return parseInt(num || 0).toLocaleString();
+            }
+
+            function getRegionFlag(region) {
+                switch (region) {
+                    case 'IND': return '🇮🇳';
+                    case 'BR': return '🇧🇷';
+                    case 'US': return '🇺🇸';
+                    case 'SAC': return '🌎';
+                    case 'NA': return '🇺🇸';
+                    case 'EU': return '🇪🇺';
+                    case 'ME': return '🌍';
+                    case 'ID': return '🇮🇩';
+                    case 'TH': return '🇹🇭';
+                    case 'VN': return '🇻🇳';
+                    case 'SG': return '🇸🇬';
+                    case 'BD': return '🇧🇩';
+                    case 'PK': return '🇵🇰';
+                    case 'MY': return '🇲🇾';
+                    case 'PH': return '🇵🇭';
+                    case 'RU': return '🇷🇺';
+                    case 'AFR': return '🌍';
+                    default: return '🌐';
+                }
             }
 
             // Fixed CS Rank calculation - stars continue without reset
