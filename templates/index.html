@@ -426,6 +426,14 @@
                 margin: 25px 0 20px 0;
                 font-size: 1.5rem;
             }
+            .emoji-color {
+                background: none !important;
+                -webkit-background-clip: initial !important;
+                -webkit-text-fill-color: initial !important;
+                color: initial !important;
+                text-shadow: none !important;
+                filter: none !important;
+            }
         </style>
     </head>
     <body>
@@ -438,7 +446,7 @@
         <!-- Welcome Screen -->
         <div class="welcome-screen" id="welcomeScreen">
             <div class="welcome-content">
-                <div class="welcome-title">🔥 TSun Info Api</div>
+                <div class="welcome-title"><span class="emoji-color">🔥</span> TSun Info Api</div>
                 <div class="welcome-subtitle">Free Fire Account Information & Api Doc</div>
                 <button class="start-btn" onclick="startApp()">CLICK TO Enter</button>
             </div>
@@ -447,7 +455,7 @@
         <!-- Main Content -->
         <div class="container main-content" id="mainContent">
             <div class="header floating">
-                <div class="brand">🔥 TSun Info Api</div>
+                <div class="brand"><span class="emoji-color">🔥</span> TSun Info Api</div>
                 <div class="tagline">Free Fire Account Information & Api Doc</div>
             </div>
 
