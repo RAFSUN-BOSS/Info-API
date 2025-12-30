@@ -33,9 +33,23 @@ cached_tokens = defaultdict(dict)
 creds_cache = {} # creds -> info
 region_locks = defaultdict(asyncio.Lock) # Used for creds locking
 global_client = None
+client_lock = asyncio.Lock()
 
 class RateLimitError(Exception):
     pass
+
+async def get_or_create_client():
+    """Ensure httpx client is initialized before use."""
+    global global_client
+    if global_client is None:
+        async with client_lock:
+            if global_client is None:
+                global_client = httpx.AsyncClient(
+                    verify=False, 
+                    timeout=60.0, 
+                    limits=httpx.Limits(max_connections=100, max_keepalive_connections=20)
+                )
+    return global_client
 
 # === Helper Functions ===
 def pad(text: bytes) -> bytes:
@@ -101,8 +115,20 @@ async def get_access_token(account: str):
     headers = {'User-Agent': USERAGENT, 'Connection': "Keep-Alive", 'Accept-Encoding': "gzip", 'Content-Type': "application/x-www-form-urlencoded"}
     
     async def fetch():
-        resp = await global_client.post(url, data=payload, headers=headers)
-        data = resp.json()
+        client = await get_or_create_client()
+        resp = await client.post(url, data=payload, headers=headers)
+        
+        if not resp.content:
+            raise Exception("Empty response from token endpoint")
+        
+        try:
+            data = resp.json()
+        except Exception as e:
+            raise Exception(f"Failed to parse JSON response: {e}, Status: {resp.status_code}, Content: {resp.text[:200]}")
+        
+        if not data:
+            raise Exception(f"Null JSON response, Status: {resp.status_code}, Content: {resp.text[:200]}")
+        
         access_token = data.get("access_token", "0")
         open_id = data.get("open_id", "0")
         uid = account.split('&')[0].split('=')[1]
@@ -129,11 +155,24 @@ async def create_jwt(region: str):
             url = f"https://jwt.tsunstudio.pw/v1/auth/saeed?uid={uid}&password={password}"
 
             async def fetch_jwt():
-                resp = await global_client.get(url, timeout=30.0)
-                if resp.status_code == 200:
-                    return resp.json()
-                else:
+                client = await get_or_create_client()
+                resp = await client.get(url, timeout=30.0)
+                
+                if resp.status_code != 200:
                     raise Exception(f"Status: {resp.status_code} | Content: {resp.text}")
+                
+                if not resp.content:
+                    raise Exception(f"Empty response from JWT API, Status: {resp.status_code}")
+                
+                try:
+                    data = resp.json()
+                except Exception as e:
+                    raise Exception(f"Failed to parse JWT JSON: {e}, Status: {resp.status_code}, Content: {resp.text[:200]}")
+                
+                if not data:
+                    raise Exception(f"Null JWT response, Status: {resp.status_code}, Content: {resp.text[:200]}")
+                
+                return data
 
             data = await retry_api_request(fetch_jwt)
             
@@ -188,13 +227,23 @@ async def get_token_info(region: str) -> Tuple[str, str, str]:
 async def GetAccountInformation(uid, unk, region, endpoint):
     # Try temporary API first to bypass rate limits
     try:
+        client = await get_or_create_client()
         temp_api_url = f"https://danger-info-alpha.vercel.app/web-info?uid={uid}"
-        resp = await global_client.get(temp_api_url, timeout=30.0)
+        resp = await client.get(temp_api_url, timeout=30.0)
+        
         if resp.status_code == 200:
-            temp_data = resp.json()
-            if temp_data.get("status") == "success" and temp_data.get("data"):
-                print(f"Successfully fetched data from temporary API for UID {uid}", flush=True)
-                return temp_data.get("data")
+            if not resp.content:
+                print(f"Temporary API returned empty content for UID {uid}", flush=True)
+            else:
+                try:
+                    temp_data = resp.json()
+                    if temp_data and temp_data.get("status") == "success" and temp_data.get("data"):
+                        print(f"Successfully fetched data from temporary API for UID {uid}", flush=True)
+                        return temp_data.get("data")
+                    else:
+                        print(f"Temporary API returned invalid data structure for UID {uid}: {temp_data}", flush=True)
+                except Exception as json_err:
+                    print(f"Failed to parse temporary API JSON for UID {uid}: {json_err}, Content: {resp.text[:200]}", flush=True)
     except Exception as e:
         print(f"Temporary API failed for UID {uid}: {e}", flush=True)
 
@@ -215,7 +264,8 @@ async def GetAccountInformation(uid, unk, region, endpoint):
 
         async def make_request():
             try:
-                resp = await global_client.post(server + endpoint, data=data_enc, headers=headers, timeout=30.0)
+                client = await get_or_create_client()
+                resp = await client.post(server + endpoint, data=data_enc, headers=headers, timeout=30.0)
 
                 if resp.status_code == 429:  # Rate limited
                     import random
@@ -417,10 +467,19 @@ def index():
 
 # === Startup ===
 async def startup():
-    global global_client
-    global_client = httpx.AsyncClient(verify=False, timeout=60.0, limits=httpx.Limits(max_connections=100, max_keepalive_connections=20))
-    await initialize_tokens()
-    asyncio.create_task(refresh_tokens_periodically())
+    """Initialize resources for local development."""
+    # Ensure client is created
+    await get_or_create_client()
+    
+    # Initialize tokens if not already done
+    if not cached_tokens:
+        await initialize_tokens()
+    
+    # Try to start periodic refresh (might not work on Vercel but fine for local)
+    try:
+        asyncio.create_task(refresh_tokens_periodically())
+    except Exception as e:
+        print(f"Could not start token refresh task: {e}", flush=True)
 
 if __name__ == '__main__':
     loop = asyncio.new_event_loop()
